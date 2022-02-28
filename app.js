@@ -28,26 +28,10 @@ function launchAccount(name) {
 	shell.exec(launchCommand)
 }
 
-function findProcessIDs(string = 'steam.exe') {
-	let apps =  shell.exec(`tasklist | findstr /B ${string}`).stdout;
-	apps = apps.split('\r\n');
-
-	const processIDs = [];
-
-	for(let app of apps) {
-		// skip empty strings
-		if(app === '') {
-			continue;
-		}
-		// trim it
-		app = app.replace(/\s+/g, ' ').split(' ');
-
-		if(app[1] && !isNaN( parseInt(app[1]) ) ) {
-			processIDs.push( parseInt(app[1]) );
-		}
-	}
-
-	return { maxProcessID: Math.max(...processIDs), processIDs };
+function findProcessID(string = 'steam.exe', user = 'ANONYMOUS LOGIN') {
+	let app =  shell.exec(`tasklist /v /fi "IMAGENAME eq ${string}" | findstr "${user}"`).stdout;
+	app = app.replace(/\s+/g, ' ').split(' ');
+	return app[1];
 }
 
 function killProcessID(processID) {
@@ -57,16 +41,20 @@ function killProcessID(processID) {
 
 
 function closeProcesses() {
-	const { maxProcessID: maxSteamProcessID, processIDs: steamProcessIDs } = findProcessIDs('steam.exe');
-	const { maxProcessID: maxMasterDuelProcessID, processIDs: masterDuelProcessIDs } = findProcessIDs('masterduel.exe');
-
-	if(steamProcessIDs.length > 1) {
-		killProcessID(maxSteamProcessID);	
+	try {
+		const steamProcessID = findProcessID('steam.exe');
+		const masterDuelProcessID = findProcessID('masterduel.exe');
+		killProcessID(steamProcessID);
+		killProcessID(masterDuelProcessID);		
+	} catch(error) {
+		console.log("Unable to kill existing Processes. Perhaps they weren't running?");
 	}
 
-	if(masterDuelProcessIDs.length > 1) {
-		killProcessID(maxMasterDuelProcessID);	
-	}
+}
+
+function main() {
+	closeProcesses();
+	launchAccount(ACCOUNT_SLUG);
 }
 
 
