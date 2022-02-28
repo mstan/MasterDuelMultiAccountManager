@@ -18,3 +18,5 @@ function symlinkAllDirs() {
 		shell.exec(symLinkCommand);
 	}
 }
+
+symlinkAllDirs();
