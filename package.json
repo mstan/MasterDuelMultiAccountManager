@@ -1,0 +1,16 @@
+{
+  "name": "masterduelaccountmanager",
+  "version": "0.0.1",
+  "description": "easily manage multiple sandboxed master duel accounts",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "fs-extra": "^10.0.1",
+    "shelljs": "^0.8.5"
+  }
+}
