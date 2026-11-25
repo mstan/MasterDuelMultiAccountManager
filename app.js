@@ -1,62 +1,58 @@
-require('dotenv').config();
-const accounts = require('./accounts.js');
-const { 
-	SANDBOX_LOCALDATA_PATH, 
-	MASTER_DIR_NAME,
-	SANDBOX_APPLICATION_PATH,
-	STEAM_APPLICATION_PATH
-} = process.env;
-const ACCOUNT_SLUG = process.argv[2];
-const shell = require('shelljs');
-const fs = require('fs-extra');
-
-
-function symlinkAllDirs() {
-	let dirs = fs.readdirSync(SANDBOX_LOCALDATA_PATH);
-	dirs = dirs.filter((value, index) => value != MASTER_DIR_NAME);
-	for(const dir of dirs ) {
-		fs.emptyDirSync(`${SANDBOX_LOCALDATA_PATH}/${dir}`);
-		const symLinkCommand = `mklink /D "${SANDBOX_LOCALDATA_PATH}/${dir}/0000" "${SANDBOX_LOCALDATA_PATH}/${MASTER_DIR_NAME}/0000"`
-		shell.exec(symLinkCommand);
-	}
+function buildLaunchCommand(config, accounts, name) {
+  if (!Object.prototype.hasOwnProperty.call(accounts, name)) {
+    throw new Error('Choose an account key from accounts.js, for example: node app.js "blue eyes"');
+  }
+  const { username, password } = accounts[name];
+  if (typeof username !== 'string' || !username.length ||
+      typeof password !== 'string' || !password.length) {
+    throw new Error('The selected account needs a username and password in accounts.js.');
+  }
+  for (const key of ['SANDBOX_APPLICATION_PATH', 'STEAM_APPLICATION_PATH']) {
+    if (typeof config[key] !== 'string' || !config[key].trim()) throw new Error(`Set ${key} in .env.`);
+  }
+  return {
+    file: config.SANDBOX_APPLICATION_PATH,
+    args: [config.STEAM_APPLICATION_PATH, '-login', username, password, '-applaunch', '1449850']
+  };
 }
 
-
-function launchAccount(name) {
-	const { username, password } = accounts[name];
-	const launchCommand = `"${SANDBOX_APPLICATION_PATH}" "${STEAM_APPLICATION_PATH}" -login ${username} ${password} -applaunch 1449850`
-	shell.exec(launchCommand)
-}
-
-function findProcessID(string = 'steam.exe', user = 'ANONYMOUS LOGIN') {
-	let app =  shell.exec(`tasklist /v /fi "IMAGENAME eq ${string}" | findstr "${user}"`).stdout;
-	app = app.replace(/\s+/g, ' ').split(' ');
-	return app[1];
+function findProcessID(image = 'steam.exe', user = 'ANONYMOUS LOGIN') {
+  const shell = require('shelljs');
+  const output = shell.exec(`tasklist /v /fi "IMAGENAME eq ${image}" | findstr "${user}"`).stdout;
+  return output.replace(/\s+/g, ' ').split(' ')[1];
 }
 
 function killProcessID(processID) {
-	shell.exec(`TASKKILL /f /PID ${processID}`);
+  if (/^\d+$/.test(String(processID))) require('shelljs').exec(`TASKKILL /f /PID ${processID}`);
 }
 
-
-
 function closeProcesses() {
-	try {
-		const steamProcessID = findProcessID('steam.exe');
-		const masterDuelProcessID = findProcessID('masterduel.exe');
-		killProcessID(steamProcessID);
-		killProcessID(masterDuelProcessID);		
-	} catch(error) {
-		console.log("Unable to kill existing Processes. Perhaps they weren't running?");
-	}
-
+  try {
+    killProcessID(findProcessID('steam.exe'));
+    killProcessID(findProcessID('masterduel.exe'));
+  } catch (error) {
+    console.log('Unable to close existing sandboxed Steam or Master Duel processes.');
+  }
 }
 
 function main() {
-	closeProcesses();
-	launchAccount(ACCOUNT_SLUG);
+  require('dotenv').config();
+  const command = buildLaunchCommand(process.env, require('./accounts.js'), process.argv[2]);
+  const fs = require('node:fs');
+  for (const file of [command.file, command.args[0]]) {
+    if (!fs.statSync(file).isFile()) throw new Error('Configure existing Sandboxie Start.exe and Steam.exe paths in .env.');
+  }
+  // Resolve the account and executable paths before stopping a running game.
+  closeProcesses();
+  const result = require('node:child_process').spawnSync(command.file, command.args,
+    { stdio: 'inherit', shell: false, windowsHide: true });
+  if (result.error) throw new Error(result.error.message);
+  process.exitCode = result.status === null ? 1 : result.status;
 }
 
+if (require.main === module) {
+  try { main(); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
+}
 
-closeProcesses();
-launchAccount(ACCOUNT_SLUG);
+module.exports = { buildLaunchCommand };
